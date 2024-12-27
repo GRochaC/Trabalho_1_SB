@@ -1,9 +1,18 @@
 section text
-main: input l1
-load l1
-add um
-output l1   ; printa a resposta
+INPut N 
+
+Load n 
+FAT: 
+SUB oNE
+jmpz fim
+store aux
+mult n
+sTore N 
+load aux 
+jmp fat
+FIM: output N 
 stop
-section data
-l1: space
-um: const 1
+secTion data 
+aux: space
+n: space 
+one: const 1
