@@ -3,7 +3,6 @@
 #include "pre_processador.h"
 #include "regex"
 #include "string"
-#include "cstdint"
 
 using namespace std;
 
@@ -47,12 +46,14 @@ int main(int argc, char *argv[]) {
         /*Primeira passagem*/
         string line;
         int line_counter = 1, address_counter = 0;
-        map<string, int> label_table;
+        map<string, int> label_table, definition_table;
+        map<string, vector<int>> usage_table;
+        bool looking_for_end = false;
         while(getline(inputFile, line)){
             Instruction inst = parseInstruction(line);
-
             /*adiciona rotulo na TS*/
             if(inst.label != ""){
+                // adiciona o label na tabela de labels
                 if(label_table.count(inst.label)){
                     cerr << "Error in line " << line_counter
                          << ": Duplicate label '" << inst.label
@@ -60,11 +61,26 @@ int main(int argc, char *argv[]) {
                     return 1;
                 }
                 
+                //testa erro lexico do rotulo
+                if(regex_match(inst.label, regex(R"(^\\d.*[^a-zA-Z0-9_].*)"))){
+                    cerr << "Error in line " << line_counter <<  ": Wrong label name construction.\n";
+                    return 1;
+                }
+
                 label_table[inst.label] = address_counter;
+
+                // adiciona o label na tabela de definicao
+                if(definition_table.count(inst.label)){
+                    definition_table[inst.label] = address_counter;
+                }
             }
 
             if(inst.label != "" and inst.operation == "") continue;
             
+            if(usage_table.count(inst.operand1)) usage_table[inst.operand1].push_back(address_counter + 1);
+            
+            if(usage_table.count(inst.operand2)) usage_table[inst.operand2].push_back(address_counter + 2);
+
             if(opcode_table.count(inst.operation)) address_counter += opcode_table[inst.operation].second;
 
             else if(inst.operation == "CONST") address_counter++;
@@ -77,6 +93,37 @@ int main(int argc, char *argv[]) {
                 line_counter++;
                 continue;
             }
+            
+            else if(inst.operation == "BEGIN") {
+                if(looking_for_end) {
+                    cerr << "Error in line " << line_counter
+                         << ": Cannot define nested modules.\n";
+
+                    return 1;
+                }
+                
+                looking_for_end = true;    
+            }
+            
+            else if(inst.operation == "END") {
+                looking_for_end = false;
+            }
+
+            else if(inst.operation == "EXTERN") {
+                // adiciona na tabela de uso
+                usage_table[inst.label] = {};
+            }
+
+            else if(inst.operation == "PUBLIC") {
+                if(not looking_for_end){
+                    cerr << "Error in line " << line_counter
+                         << ": Module not defined.\n";
+                    return 1;
+                }
+                // adiciona na tabela de definicao
+                definition_table[inst.operand1] = 0;
+            }
+
             else {
                 cerr << "Error in line "  << line_counter
                      << ": Operation '" << inst.operation
@@ -88,15 +135,22 @@ int main(int argc, char *argv[]) {
             line_counter++;
         }
 
+        // checa se o BEGIN foi finalizado
+        if(looking_for_end) {
+            cerr << "Error: Module was not finalized."; 
+            return 1;
+        }
+
         // volta para o inicio do arquivo
         inputFile.clear();
         inputFile.seekg(0);
         
-        // nao reconhece 0xffff como -1
         auto parseHex2Int = [](string str_hex) {
             if(regex_match(str_hex, regex("^0[xX].*"))) {
-                str_hex = regex_replace(str_hex, regex("^0[Xx]"), "");
-                int num_int = stoi(str_hex,nullptr,16);
+                unsigned int tmp_int = stoul(str_hex,nullptr,0);
+                
+                int num_int = static_cast<int16_t>(tmp_int);
+
                 return to_string(num_int);
             } 
             
@@ -106,11 +160,11 @@ int main(int argc, char *argv[]) {
         /*Segunda passagem*/
         line_counter = 1;
         address_counter = 0;
-        vector<string> obj_code;
+        vector<string> obj_code, bitmap;
         while(getline(inputFile, line)){
             Instruction inst = parseInstruction(line);
 
-            if(inst.operation == "SECTION") continue;
+            if(inst.operation == "SECTION" or inst.operation == "BEGIN" or inst.operation == "END" or inst.operation == "EXTERN" or inst.operation == "PUBLIC") continue;
             
             if(inst.label != "" and inst.operation == "") continue;
 
@@ -119,19 +173,21 @@ int main(int argc, char *argv[]) {
                     cerr << "Error ";
                     return 1;
                 }
-
-                /*TODO: fazer um decodificador para hexadecimais que reconhece complemento de 16*/
+                bitmap.push_back("0");
+                // verficar se tem que resolver labels aqui
                 obj_code.push_back(parseHex2Int(inst.operand1));
             }
             
             else if(inst.operation == "SPACE"){
                 if(inst.operand1 == ""){
+                    bitmap.push_back("0");
                     obj_code.push_back("0");
                     address_counter++;
                 } else {
                     
                     /*TODO: checar se o argumento eh valido */
                     for (int n = 0; n < stoi(inst.operand1); n++){
+                        bitmap.push_back("0");
                         obj_code.push_back("0");
                         address_counter++;
                     }
@@ -160,20 +216,39 @@ int main(int argc, char *argv[]) {
 
                 else {
                     if(label_table.count(inst.operand1)) obj_code.push_back(to_string(label_table[inst.operand1]));
+                    else if(usage_table.count(inst.operand1)) obj_code.push_back("0");
                     else if (inst.operand1 != "") obj_code.push_back(inst.operand1);
                     
                     if(label_table.count(inst.operand2)) obj_code.push_back(to_string(label_table[inst.operand2]));
+                    else if(usage_table.count(inst.operand2)) obj_code.push_back("0");                
                     else if(inst.operand2 != "") obj_code.push_back(inst.operand2);
                 }
-            }
+           
+                switch (opcode_table[inst.operation].second) {
+                    case 1:
+                        bitmap.push_back("0");
+                        break;
+                    case 2:
+                        bitmap.push_back("0");
+                        bitmap.push_back("1");
+                        break;
+                    case 3:
+                        bitmap.push_back("0");
+                        bitmap.push_back("1");
+                        bitmap.push_back("1");
+                        break;
+                }
+           }
 
             else {
-                cerr << "Error in line" << line_counter
+                cerr << "Error in line " << line_counter
                      << ": Operation '" << inst.operation
                      << "' not identified.\n";     
                      
                 return 1;
             }
+            
+
             line_counter++;
         }
 
@@ -183,6 +258,20 @@ int main(int argc, char *argv[]) {
 
         ofstream outputFile;
         outputFile.open(new_file_name);
+
+        if(not definition_table.empty()) for(auto [label,address] : definition_table) outputFile << "D, " << label << " " << address << '\n'; 
+        
+        if(not usage_table.empty()) {
+            for(auto [label,addresses] : usage_table) 
+                for(int address : addresses) outputFile << "U, " << label << " " << address << '\n';
+        }
+        
+        if(not bitmap.empty()) {
+            outputFile << "R, ";
+            for(string bit : bitmap) outputFile << bit << " ";
+            outputFile << '\n';
+        }
+
         for(string address : obj_code) outputFile << address << ' ';
         
         outputFile.close();
