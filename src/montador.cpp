@@ -3,6 +3,7 @@
 #include "pre_processador.h"
 #include "regex"
 #include "string"
+#include "cstdint"
 
 using namespace std;
 
@@ -91,10 +92,21 @@ int main(int argc, char *argv[]) {
         inputFile.clear();
         inputFile.seekg(0);
         
+        // nao reconhece 0xffff como -1
+        auto parseHex2Int = [](string str_hex) {
+            if(regex_match(str_hex, regex("^0[xX].*"))) {
+                str_hex = regex_replace(str_hex, regex("^0[Xx]"), "");
+                int num_int = stoi(str_hex,nullptr,16);
+                return to_string(num_int);
+            } 
+            
+            else return str_hex;
+        };
+
         /*Segunda passagem*/
         line_counter = 1;
         address_counter = 0;
-        vector<string> code;
+        vector<string> obj_code;
         while(getline(inputFile, line)){
             Instruction inst = parseInstruction(line);
 
@@ -108,26 +120,26 @@ int main(int argc, char *argv[]) {
                     return 1;
                 }
 
-                /*TODO: fazer um decodificador para hexadecimais */
-                code.push_back(inst.operand1);
+                /*TODO: fazer um decodificador para hexadecimais que reconhece complemento de 16*/
+                obj_code.push_back(parseHex2Int(inst.operand1));
             }
             
             else if(inst.operation == "SPACE"){
                 if(inst.operand1 == ""){
-                    code.push_back("0");
+                    obj_code.push_back("0");
                     address_counter++;
                 } else {
                     
                     /*TODO: checar se o argumento eh valido */
                     for (int n = 0; n < stoi(inst.operand1); n++){
-                        code.push_back("0");
+                        obj_code.push_back("0");
                         address_counter++;
                     }
                 }
             }
 
             else if(opcode_table.count(inst.operation)) {
-                code.push_back(to_string(opcode_table[inst.operation].first));
+                obj_code.push_back(to_string(opcode_table[inst.operation].first));
 
                 if(inst.operation == "COPY" and (inst.operand1 == "" or inst.operand2 == "")) {
                     cerr << "Error in line " << line_counter
@@ -147,11 +159,11 @@ int main(int argc, char *argv[]) {
                 }
 
                 else {
-                    if(label_table.count(inst.operand1)) code.push_back(to_string(label_table[inst.operand1]));
-                    else if (inst.operand1 != "") code.push_back(inst.operand1);
+                    if(label_table.count(inst.operand1)) obj_code.push_back(to_string(label_table[inst.operand1]));
+                    else if (inst.operand1 != "") obj_code.push_back(inst.operand1);
                     
-                    if(label_table.count(inst.operand2)) code.push_back(to_string(label_table[inst.operand2]));
-                    else if(inst.operand2 != "") code.push_back(inst.operand2);
+                    if(label_table.count(inst.operand2)) obj_code.push_back(to_string(label_table[inst.operand2]));
+                    else if(inst.operand2 != "") obj_code.push_back(inst.operand2);
                 }
             }
 
@@ -171,7 +183,7 @@ int main(int argc, char *argv[]) {
 
         ofstream outputFile;
         outputFile.open(new_file_name);
-        for(string address : code) outputFile << address << ' ';
+        for(string address : obj_code) outputFile << address << ' ';
         
         outputFile.close();
 

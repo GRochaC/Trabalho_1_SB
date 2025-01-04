@@ -3,7 +3,7 @@ INPut N
 
 Load n 
 FAT: 
-SUB oNE
+add oNE
 jmpz fim
 store aux
 mult n
@@ -15,4 +15,4 @@ stop
 secTion data 
 aux: space
 n: space 
-one: const 1
+one: const 0xffff

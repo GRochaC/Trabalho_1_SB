@@ -146,9 +146,3 @@ int process(string file_name) {
     
     return 0;
 }
-
-/*
- LABEL: SPACE -> ocupa 1
- LABEL: SPACE 1 -> 1
- LABEL: SPACE 4 -> 4
-*/
