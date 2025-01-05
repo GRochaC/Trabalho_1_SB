@@ -12,24 +12,36 @@ Implementação em C++ de um montador e ligador da disciplina "CIC0104 - Softwar
 ## Compilação
 Para compilar o montador, copie este comando no terminal:
 
-```g++ -Wall -o MONTADOR src/montador.cpp```
+```bash
+g++ -Wall -o MONTADOR src/montador.cpp
+```
 
 Para compilar o ligador, copie este comando no terminal:
 
-```g++ -Wall -o LIGADOR src/ligador.cpp```
+```bash
+g++ -Wall -o LIGADOR src/ligador.cpp
+```
 
 ## Execução
 ### Montador
 Uma vez com os programas compilados, o Montador possui dois modos:
 1. Para montar um arquivo `.pre` a partir de um arquivo `.asm`, copie este comando no terminal:
 
-```./MONTADOR myfile.asm```
+```bash
+./MONTADOR myfile.asm
+```
 
 2. Para montar um arquivo `.obj` a partir de um arquivo `.pre`, copie este comando no terminal:
 
-```./MONTADOR myfile.pre```
+```bash
+./MONTADOR myfile.pre
+```
 
 ### Ligador
 O Ligador gera um arquivo `.e` a partir de dois arquivos `.obj` com ligação ao rodar este comando no terminal:
 
-```./LIGADOR prog1.obj prog2.obj```
+```bash
+./LIGADOR prog1.obj prog2.obj
+```
+
+Link para o repositório do Github: [link](https://github.com/GRochaC/Trabalho_1_SB)
