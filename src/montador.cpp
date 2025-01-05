@@ -1,8 +1,4 @@
-#include "iostream"
-#include "fstream"
 #include "pre_processador.h"
-#include "regex"
-#include "string"
 
 using namespace std;
 
@@ -36,10 +32,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    
-    if (regex_match(filePath, regex(".*\\.asm$"))){
-        return process(filePath);
-    }
+    if (regex_match(filePath, regex(".*\\.asm$"))) return process(filePath);
 
     if (regex_match(filePath, regex(".*\\.pre$"))){
 
@@ -50,29 +43,28 @@ int main(int argc, char *argv[]) {
         map<string, vector<int>> usage_table;
         bool looking_for_end = false;
         while(getline(inputFile, line)){
-            Instruction inst = parseInstruction(line);
+            Instruction inst = Instruction(line);
+
             /*adiciona rotulo na TS*/
             if(inst.label != ""){
                 // adiciona o label na tabela de labels
                 if(label_table.count(inst.label)){
-                    cerr << "Error in line " << line_counter
+                    cerr << "Semantic Error in line " << line_counter
                          << ": Duplicate label '" << inst.label
                          << "'.\n";
                     return 1;
                 }
                 
                 //testa erro lexico do rotulo
-                if(regex_match(inst.label, regex(R"(^\\d.*[^a-zA-Z0-9_].*)"))){
-                    cerr << "Error in line " << line_counter <<  ": Wrong label name construction.\n";
+                if(regex_search(inst.label, regex("^\\d|[^a-zA-Z0-9_]"))){
+                    cerr << "Lexical Error in line " << line_counter <<  ": Wrong label name construction.\n";
                     return 1;
                 }
 
                 label_table[inst.label] = address_counter;
 
                 // adiciona o label na tabela de definicao
-                if(definition_table.count(inst.label)){
-                    definition_table[inst.label] = address_counter;
-                }
+                if(definition_table.count(inst.label)) definition_table[inst.label] = address_counter;
             }
 
             if(inst.label != "" and inst.operation == "") continue;
@@ -96,7 +88,7 @@ int main(int argc, char *argv[]) {
             
             else if(inst.operation == "BEGIN") {
                 if(looking_for_end) {
-                    cerr << "Error in line " << line_counter
+                    cerr << "Syntax Error in line " << line_counter
                          << ": Cannot define nested modules.\n";
 
                     return 1;
@@ -105,9 +97,7 @@ int main(int argc, char *argv[]) {
                 looking_for_end = true;    
             }
             
-            else if(inst.operation == "END") {
-                looking_for_end = false;
-            }
+            else if(inst.operation == "END") looking_for_end = false;
 
             else if(inst.operation == "EXTERN") {
                 // adiciona na tabela de uso
@@ -116,7 +106,7 @@ int main(int argc, char *argv[]) {
 
             else if(inst.operation == "PUBLIC") {
                 if(not looking_for_end){
-                    cerr << "Error in line " << line_counter
+                    cerr << "Syntax Error in line " << line_counter
                          << ": Module not defined.\n";
                     return 1;
                 }
@@ -125,7 +115,7 @@ int main(int argc, char *argv[]) {
             }
 
             else {
-                cerr << "Error in line "  << line_counter
+                cerr << "Syntax Error in line "  << line_counter
                      << ": Operation '" << inst.operation
                      << "' not identified.\n";
 
@@ -137,7 +127,7 @@ int main(int argc, char *argv[]) {
 
         // checa se o BEGIN foi finalizado
         if(looking_for_end) {
-            cerr << "Error: Module was not finalized."; 
+            cerr << "Syntax Error: Module without an end."; 
             return 1;
         }
 
@@ -162,7 +152,7 @@ int main(int argc, char *argv[]) {
         address_counter = 0;
         vector<string> obj_code, bitmap;
         while(getline(inputFile, line)){
-            Instruction inst = parseInstruction(line);
+            Instruction inst = Instruction(line);
 
             if(inst.operation == "SECTION" or inst.operation == "BEGIN" or inst.operation == "END" or inst.operation == "EXTERN" or inst.operation == "PUBLIC") continue;
             
@@ -170,11 +160,12 @@ int main(int argc, char *argv[]) {
 
             else if(inst.operation == "CONST"){
                 if(inst.operand1 == ""){
-                    cerr << "Error ";
+                    cerr << "Syntax Error in line " << line_counter << ": constant value not defined.";
                     return 1;
                 }
+
                 bitmap.push_back("0");
-                // verficar se tem que resolver labels aqui
+
                 obj_code.push_back(parseHex2Int(inst.operand1));
             }
             
@@ -183,9 +174,8 @@ int main(int argc, char *argv[]) {
                     bitmap.push_back("0");
                     obj_code.push_back("0");
                     address_counter++;
+
                 } else {
-                    
-                    /*TODO: checar se o argumento eh valido */
                     for (int n = 0; n < stoi(inst.operand1); n++){
                         bitmap.push_back("0");
                         obj_code.push_back("0");
@@ -198,30 +188,35 @@ int main(int argc, char *argv[]) {
                 obj_code.push_back(to_string(opcode_table[inst.operation].first));
 
                 if(inst.operation == "COPY" and (inst.operand1 == "" or inst.operand2 == "")) {
-                    cerr << "Error in line " << line_counter
+                    cerr << "Syntax Error in line " << line_counter
                          << ": Copy operation expected 2 arguments.";
                     return 1;
                 }
 
                 else if(inst.operation == "STOP" and (inst.operand1 != "" or inst.operand2 != "")) {
-                    cerr << "Error in line "<< line_counter 
+                    cerr << "Syntax Error in line "<< line_counter 
                          << ": STOP operation expected 0 arguments.";
                     return 1;                }
 
                 else if(inst.operation != "COPY" and inst.operand2 != ""){
-                    cerr << "Error in line "<< line_counter 
+                    cerr << "Syntax Error in line "<< line_counter 
                          << ": "<< inst.operation <<" operation expected 1 argument.";
                     return 1;
                 }
-
                 else {
                     if(label_table.count(inst.operand1)) obj_code.push_back(to_string(label_table[inst.operand1]));
                     else if(usage_table.count(inst.operand1)) obj_code.push_back("0");
-                    else if (inst.operand1 != "") obj_code.push_back(inst.operand1);
+                    else if(inst.operand1 != ""){
+                        cerr << "Semantic Error in line " << line_counter << ": label \"" << inst.operand1 << "\" not defined.";
+                        return 1;
+                    }
                     
                     if(label_table.count(inst.operand2)) obj_code.push_back(to_string(label_table[inst.operand2]));
                     else if(usage_table.count(inst.operand2)) obj_code.push_back("0");                
-                    else if(inst.operand2 != "") obj_code.push_back(inst.operand2);
+                    else if(inst.operand2 != ""){
+                        cerr << "Semantic Error in line " << line_counter << ": label \"" << inst.operand2 << "\" not defined.";
+                        return 1;
+                    }
                 }
            
                 switch (opcode_table[inst.operation].second) {
@@ -241,13 +236,12 @@ int main(int argc, char *argv[]) {
            }
 
             else {
-                cerr << "Error in line " << line_counter
+                cerr << "Syntax Error in line " << line_counter
                      << ": Operation '" << inst.operation
                      << "' not identified.\n";     
                      
                 return 1;
             }
-            
 
             line_counter++;
         }
@@ -266,7 +260,7 @@ int main(int argc, char *argv[]) {
                 for(int address : addresses) outputFile << "U, " << label << " " << address << '\n';
         }
         
-        if(not bitmap.empty()) {
+        if(not bitmap.empty() and (not definition_table.empty() or not usage_table.empty())) {
             outputFile << "R, ";
             for(string bit : bitmap) outputFile << bit << " ";
             outputFile << '\n';

@@ -1,2 +1,9 @@
 chave.txt
 .vscode
+modA.asm
+modA.pre
+modA.obj
+modB.asm
+modB.pre
+modB.obj
+modA.e

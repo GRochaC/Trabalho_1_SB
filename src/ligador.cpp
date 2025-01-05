@@ -1,8 +1,11 @@
 #include "iostream"
 #include "fstream"
-#include "pre_processador.h"
 #include "regex"
 #include "string"
+#include "vector"
+#include "map"
+
+using namespace std;
 
 struct obj_code {
     map<string,int> definition_table;
@@ -83,7 +86,7 @@ int main(int argc, char *argv[]) {
     map<string, int> global_definition_table = obj1.definition_table;
     for(auto [l, a] : obj2.definition_table) {
         if(global_definition_table.count(l)){
-            cerr << "Error: Found duplicate label " << l << " while linking.";
+            cerr << "Semantic Error: Found duplicate label " << l << " while linking.";
             return 1;
         }
         
